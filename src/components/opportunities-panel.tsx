@@ -9,7 +9,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Button, buttonVariants } from "@/components/ui/button";
+import { Button } from "@/components/ui/button";
+import { opportunitiesToCsv } from "@/lib/csv";
 import { Badge } from "@/components/ui/badge";
 import {
   Table,
@@ -36,6 +37,19 @@ import {
 import { Download, ExternalLink, Phone } from "lucide-react";
 
 const ALL = "__all__";
+
+function downloadCsv(opportunities: Opportunity[], searchId: string) {
+  const csv = opportunitiesToCsv(opportunities);
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `oportunidades-${searchId.slice(0, 8)}.csv`;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
 
 type SortKey = "priority" | "qualityScore" | "name";
 
@@ -126,14 +140,14 @@ export function OpportunitiesPanel({ opportunities, searchId }: Props) {
           />
         </div>
 
-        <a
-          href={`/api/export?searchId=${searchId}`}
-          download
-          className={buttonVariants({ variant: "outline", className: "gap-2" })}
+        <Button
+          variant="outline"
+          className="gap-2"
+          onClick={() => downloadCsv(opportunities, searchId)}
         >
           <Download className="size-4" />
           Exportar CSV
-        </a>
+        </Button>
       </div>
 
       <p className="text-sm text-muted-foreground">

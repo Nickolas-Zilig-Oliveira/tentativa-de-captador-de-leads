@@ -1,12 +1,18 @@
 import Database from "better-sqlite3";
 import fs from "fs";
+import os from "os";
 import path from "path";
 import { Opportunity, SearchParams } from "@/lib/types";
 
 // Persistência local simples em SQLite (arquivo único, sem servidor de banco).
-// Guarda o histórico de buscas e as oportunidades encontradas, para permitir
-// exportação em CSV e evitar reconsultar as fontes a cada clique.
-const DB_PATH = path.join(process.cwd(), "data", "leads.db");
+// Guarda o histórico de buscas para fins de auditoria/depuração.
+// Em serverless (Vercel), o filesystem do projeto é somente leitura, então
+// usamos /tmp — funciona, mas não é garantido persistir entre invocações
+// diferentes. Por isso a exportação de CSV é feita no navegador (ver
+// opportunities-panel.tsx), sem depender deste banco.
+const DB_PATH = process.env.VERCEL
+  ? path.join(os.tmpdir(), "leads.db")
+  : path.join(process.cwd(), "data", "leads.db");
 
 let db: Database.Database | null = null;
 

@@ -110,8 +110,15 @@ export async function POST(req: NextRequest) {
       : "";
   const coverageNote = `Cobertura baseada nas fontes disponíveis (${sourceNotes.join(" ")}). Pode não representar 100% dos estabelecimentos reais da região.${limitNote}`;
 
-  saveSearch(searchId, params, totalFound, coverageNote);
-  saveOpportunities(opportunities);
+  try {
+    saveSearch(searchId, params, totalFound, coverageNote);
+    saveOpportunities(opportunities);
+  } catch (err) {
+    // Persistência é apenas para histórico/depuração — a exportação CSV
+    // roda no navegador e não depende disto, então uma falha aqui não deve
+    // derrubar a busca (ex.: filesystem somente leitura em serverless).
+    console.error("Falha ao salvar histórico da busca:", err);
+  }
 
   const meta: SearchMeta = {
     searchId,
