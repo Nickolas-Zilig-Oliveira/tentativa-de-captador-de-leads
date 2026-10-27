@@ -11,6 +11,10 @@ import { mapWithConcurrency } from "@/lib/concurrency";
 import { saveSearch, saveOpportunities } from "@/lib/db";
 import { RawBusiness, SearchMeta } from "@/lib/types";
 
+// Busca + checagem de sites pode levar bem mais que o padrão de 10s.
+// 60s é o teto do plano Hobby da Vercel; em planos pagos pode ser maior.
+export const maxDuration = 60;
+
 const requestSchema = z.object({
   city: z.string().min(2),
   state: z.string().min(2).max(2),

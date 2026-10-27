@@ -93,8 +93,12 @@ export default function Home() {
             <SearchX className="size-8 text-muted-foreground" />
             <p className="font-medium">Nenhum estabelecimento encontrado nessa área</p>
             <p className="text-sm text-muted-foreground max-w-md">
-              Tente ampliar a cidade, remover o filtro de bairro ou escolher
-              &quot;Todos os segmentos&quot;.
+              {result.meta.coverageNote.includes("indisponível")
+                ? "A fonte de dados ficou temporariamente indisponível. Aguarde um momento e tente novamente."
+                : 'Tente ampliar a cidade, remover o filtro de bairro ou escolher "Todos os segmentos".'}
+            </p>
+            <p className="text-xs text-muted-foreground max-w-md mt-2">
+              {result.meta.coverageNote}
             </p>
           </CardContent>
         </Card>

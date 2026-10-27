@@ -6,7 +6,7 @@ import { BoundingBox } from "@/lib/datasources/geocode";
 // Endpoint público oficial. Sujeito a limites de uso; por isso cacheamos
 // resultados por cidade/segmento (ver src/lib/db.ts) e limitamos o timeout.
 const OVERPASS_URL = "https://overpass-api.de/api/interpreter";
-const REQUEST_TIMEOUT_MS = 45_000;
+const REQUEST_TIMEOUT_MS = 25_000;
 const USER_AGENT =
   "captador-de-leads/0.1 (uso pessoal; contato: nadanick2@gmail.com)";
 
@@ -32,7 +32,7 @@ function buildQuery(bbox: BoundingBox, tags: OsmTagFilter[]): string {
     })
     .join("\n");
 
-  return `[out:json][timeout:40];\n(\n${clauses}\n);\nout center tags;`;
+  return `[out:json][timeout:20];\n(\n${clauses}\n);\nout center tags;`;
 }
 
 function extractAddress(tags: Record<string, string>): string | null {
@@ -85,33 +85,57 @@ export async function searchOverpass(
 ): Promise<RawBusiness[]> {
   const query = buildQuery(bbox, tags);
 
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  // O servidor público do Overpass costuma devolver 502/504 quando está
+  // sobrecarregado (não é um erro da nossa aplicação). Tentamos uma vez
+  // mais após um pequeno intervalo antes de desistir.
+  const RETRYABLE_STATUS = new Set([502, 503, 504]);
+  let lastError: Error | null = null;
 
-  let res: Response;
-  try {
-    res = await fetch(OVERPASS_URL, {
-      method: "POST",
-      body: `data=${encodeURIComponent(query)}`,
-      headers: {
-        "Content-Type": "application/x-www-form-urlencoded",
-        "User-Agent": USER_AGENT,
-        Accept: "*/*",
-      },
-      signal: controller.signal,
-    });
-  } finally {
-    clearTimeout(timeout);
+  for (let attempt = 0; attempt < 2; attempt++) {
+    if (attempt > 0) await new Promise((r) => setTimeout(r, 3000));
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+
+    let res: Response;
+    try {
+      res = await fetch(OVERPASS_URL, {
+        method: "POST",
+        body: `data=${encodeURIComponent(query)}`,
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+          "User-Agent": USER_AGENT,
+          Accept: "*/*",
+        },
+        signal: controller.signal,
+      });
+    } catch (err) {
+      lastError = err as Error;
+      continue;
+    } finally {
+      clearTimeout(timeout);
+    }
+
+    if (!res.ok) {
+      const bodyText = await res.text().catch(() => "");
+      lastError = new Error(`Overpass respondeu ${res.status}: ${bodyText.slice(0, 300)}`);
+      if (RETRYABLE_STATUS.has(res.status) && attempt === 0) continue;
+      throw lastError;
+    }
+
+    const data = (await res.json()) as OverpassResponse;
+    return parseOverpassResponse(data, segmentId, city, state);
   }
 
-  if (!res.ok) {
-    const bodyText = await res.text().catch(() => "");
-    throw new Error(
-      `Overpass respondeu ${res.status}: ${bodyText.slice(0, 300)}`
-    );
-  }
+  throw lastError ?? new Error("Falha desconhecida ao consultar Overpass");
+}
 
-  const data = (await res.json()) as OverpassResponse;
+function parseOverpassResponse(
+  data: OverpassResponse,
+  segmentId: string,
+  city: string,
+  state: string
+): RawBusiness[] {
 
   const businesses: RawBusiness[] = [];
   for (const el of data.elements) {
